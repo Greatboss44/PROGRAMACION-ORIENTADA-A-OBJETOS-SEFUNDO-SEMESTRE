@@ -1,0 +1,24 @@
+"""
+Programa: Cálculo de área y perímetro de un rectángulo
+"""
+
+# Solicitud de datos al usuario
+ancho_rectangulo = float(input("Ingrese el ancho del rectángulo: "))
+alto_rectangulo = float(input("Ingrese el alto del rectángulo: "))
+
+# Variable booleana para validar los datos
+datos_validos = ancho_rectangulo > 0 and alto_rectangulo > 0
+
+# Verificación de datos y cálculos
+if datos_validos:
+    # Cálculo del área y perímetro
+    area = ancho_rectangulo * alto_rectangulo
+    perimetro = 2 * (ancho_rectangulo + alto_rectangulo)
+
+    # Mostrar resultados
+    print("Resultados del cálculo:")
+    print(f"Área del rectángulo: {area}")
+    print(f"Perímetro del rectángulo: {perimetro}")
+else:
+    print("Error: Los valores ingresados deben ser mayores que cero.")
+
