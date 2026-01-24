@@ -1,0 +1,59 @@
+class GestorArchivo:
+    """
+    Clase que representa un gestor simple de archivos.
+    Demuestra el uso de constructor y destructor en Python.
+    """
+
+    def __init__(self, nombre_archivo, modo):
+        """
+        CONSTRUCTOR
+        Se ejecuta automáticamente cuando se crea un objeto de la clase.
+        Su función es inicializar los atributos y preparar los recursos.
+        """
+        self.nombre_archivo = nombre_archivo
+        self.modo = modo
+        
+        # Apertura del archivo (recurso del sistema)
+        self.archivo = open(self.nombre_archivo, self.modo)
+        print(f"[INIT] Archivo '{self.nombre_archivo}' abierto en modo '{self.modo}'.")
+
+    def escribir(self, texto):
+        """
+        Método para escribir texto en el archivo.
+        """
+        if self.archivo:
+            self.archivo.write(texto + "\n")
+            print("[WRITE] Texto escrito en el archivo.")
+
+    def __del__(self):
+        """
+        DESTRUCTOR
+        Se ejecuta automáticamente cuando el objeto es eliminado de memoria
+        (por ejemplo, cuando el programa termina o se usa 'del').
+        
+        Su función es liberar recursos, como cerrar archivos abiertos.
+        """
+        if hasattr(self, 'archivo') and self.archivo:
+            self.archivo.close()
+            print(f"[DEL] Archivo '{self.nombre_archivo}' cerrado correctamente.")
+
+
+# -------------------------------
+# PROGRAMA PRINCIPAL
+# -------------------------------
+
+print("Inicio del programa")
+
+# Se crea el objeto → se ejecuta el constructor __init__
+gestor = GestorArchivo("ejemplo.txt", "w")
+
+# Se usa el objeto
+gestor.escribir("Hola, este es un ejemplo de uso de constructores y destructores.")
+gestor.escribir("Segunda línea de texto.")
+
+print("El objeto sigue existiendo...")
+
+# Se elimina el objeto manualmente → se ejecuta el destructor __del__
+del gestor
+
+print("Fin del programa")
