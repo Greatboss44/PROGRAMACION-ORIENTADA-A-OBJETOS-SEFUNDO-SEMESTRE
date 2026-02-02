@@ -1,0 +1,680 @@
+"""
+Dashboard de Gestión de Proyectos - Programación Orientada a Objetos
+=====================================================================
+
+Este módulo implementa un sistema de navegación interactivo para organizar
+y ejecutar scripts de Python organizados por unidades y subcarpetas.
+
+
+
+Características principales:
+- Navegación jerárquica por menús
+- Visualización de código fuente
+- Ejecución de scripts
+- Historial de ejecuciones
+- Búsqueda de scripts
+- Estadísticas de uso
+"""
+
+import os
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional, Dict
+
+
+class Config:
+    """
+    Clase de configuración del dashboard.
+
+    Centraliza todas las configuraciones del sistema para facilitar
+    su mantenimiento y personalización.
+    """
+    # Colores para la interfaz (códigos ANSI)
+    COLOR_RESET = '\033[0m'
+    COLOR_HEADER = '\033[95m'
+    COLOR_OKBLUE = '\033[94m'
+    COLOR_OKGREEN = '\033[92m'
+    COLOR_WARNING = '\033[93m'
+    COLOR_FAIL = '\033[91m'
+    COLOR_BOLD = '\033[1m'
+
+    # Configuración de rutas
+    EXTENSION_SCRIPTS = '.py'
+    NOMBRE_LOG = 'dashboard_history.log'
+
+    # Configuración de menús
+    OPCION_SALIR = '0'
+    OPCION_MENU_PRINCIPAL = '9'
+
+    @staticmethod
+    def usar_colores() -> bool:
+        """Determina si se deben usar colores en la terminal."""
+        return sys.platform != 'win32' or 'ANSICON' in os.environ
+
+
+class Logger:
+    """
+    Clase para registrar eventos y acciones del dashboard.
+
+    Mantiene un historial de scripts ejecutados y acciones realizadas
+    para análisis posterior.
+    """
+
+    def __init__(self, archivo_log: str):
+        """
+        Inicializa el logger.
+
+        Args:
+            archivo_log: Ruta del archivo de log
+        """
+        self.archivo_log = archivo_log
+        self._inicializar_log()
+
+    def _inicializar_log(self):
+        """Crea el archivo de log si no existe."""
+        if not os.path.exists(self.archivo_log):
+            with open(self.archivo_log, 'w', encoding='utf-8') as f:
+                f.write(f"=== Dashboard Log - Iniciado {datetime.now()} ===\n\n")
+
+    def registrar(self, accion: str, detalle: str = ""):
+        """
+        Registra una acción en el log.
+
+        Args:
+            accion: Tipo de acción realizada
+            detalle: Detalles adicionales de la acción
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entrada = f"[{timestamp}] {accion}"
+        if detalle:
+            entrada += f" - {detalle}"
+        entrada += "\n"
+
+        try:
+            with open(self.archivo_log, 'a', encoding='utf-8') as f:
+                f.write(entrada)
+        except Exception as e:
+            print(f"Error al escribir en log: {e}")
+
+    def obtener_estadisticas(self) -> Dict[str, int]:
+        """
+        Obtiene estadísticas de uso del dashboard.
+
+        Returns:
+            Diccionario con estadísticas de uso
+        """
+        stats = {
+            'visualizaciones': 0,
+            'ejecuciones': 0,
+            'total_acciones': 0
+        }
+
+        try:
+            with open(self.archivo_log, 'r', encoding='utf-8') as f:
+                for linea in f:
+                    stats['total_acciones'] += 1
+                    if 'Visualización' in linea:
+                        stats['visualizaciones'] += 1
+                    elif 'Ejecución' in linea:
+                        stats['ejecuciones'] += 1
+        except Exception:
+            pass
+
+        return stats
+
+
+class InterfazUsuario:
+    """
+    Clase para manejar la interfaz de usuario del dashboard.
+
+    Proporciona métodos para mostrar menús, mensajes y entrada de usuario
+    con formato consistente y opcional uso de colores.
+    """
+
+    def __init__(self, usar_colores: bool = True):
+        """
+        Inicializa la interfaz de usuario.
+
+        Args:
+            usar_colores: Si se deben usar colores ANSI en la terminal
+        """
+        self.usar_colores = usar_colores and Config.usar_colores()
+
+    def limpiar_pantalla(self):
+        """Limpia la pantalla de la terminal."""
+        os.system('cls' if os.name == 'nt' else 'clear')
+
+    def colorear(self, texto: str, color: str) -> str:
+        """
+        Aplica color al texto si está habilitado.
+
+        Args:
+            texto: Texto a colorear
+            color: Código de color ANSI
+
+        Returns:
+            Texto con o sin color según configuración
+        """
+        if self.usar_colores:
+            return f"{color}{texto}{Config.COLOR_RESET}"
+        return texto
+
+    def mostrar_encabezado(self, titulo: str):
+        """
+        Muestra un encabezado formateado.
+
+        Args:
+            titulo: Título a mostrar
+        """
+        linea = "=" * len(titulo)
+        print(f"\n{self.colorear(linea, Config.COLOR_HEADER)}")
+        print(self.colorear(titulo, Config.COLOR_BOLD))
+        print(f"{self.colorear(linea, Config.COLOR_HEADER)}\n")
+
+    def mostrar_menu(self, opciones: List[tuple], titulo: str = ""):
+        """
+        Muestra un menú con opciones.
+
+        Args:
+            opciones: Lista de tuplas (clave, descripción)
+            titulo: Título del menú
+        """
+        if titulo:
+            self.mostrar_encabezado(titulo)
+
+        for clave, descripcion in opciones:
+            print(f"{self.colorear(clave, Config.COLOR_OKBLUE)} - {descripcion}")
+        print()
+
+    def solicitar_entrada(self, prompt: str) -> str:
+        """
+        Solicita entrada del usuario con prompt personalizado.
+
+        Args:
+            prompt: Mensaje de solicitud
+
+        Returns:
+            Entrada del usuario
+        """
+        return input(self.colorear(prompt, Config.COLOR_OKGREEN))
+
+    def mostrar_mensaje(self, mensaje: str, tipo: str = "info"):
+        """
+        Muestra un mensaje formateado.
+
+        Args:
+            mensaje: Mensaje a mostrar
+            tipo: Tipo de mensaje (info, exito, advertencia, error)
+        """
+        colores = {
+            "info": Config.COLOR_OKBLUE,
+            "exito": Config.COLOR_OKGREEN,
+            "advertencia": Config.COLOR_WARNING,
+            "error": Config.COLOR_FAIL
+        }
+        color = colores.get(tipo, Config.COLOR_RESET)
+        print(self.colorear(mensaje, color))
+
+    def pausar(self, mensaje: str = "\nPresiona Enter para continuar..."):
+        """Pausa la ejecución esperando entrada del usuario."""
+        input(mensaje)
+
+
+class Script:
+    """
+    Representa un script de Python individual.
+
+    Encapsula la información y operaciones relacionadas con un script,
+    incluyendo visualización y ejecución.
+    """
+
+    def __init__(self, ruta: Path):
+        """
+        Inicializa un objeto Script.
+
+        Args:
+            ruta: Ruta completa al archivo del script
+        """
+        self.ruta = ruta
+        self.nombre = ruta.name
+        self.contenido: Optional[str] = None
+
+    def cargar_contenido(self) -> bool:
+        """
+        Carga el contenido del script desde el archivo.
+
+        Returns:
+            True si se cargó exitosamente, False en caso contrario
+        """
+        try:
+            with open(self.ruta, 'r', encoding='utf-8') as archivo:
+                self.contenido = archivo.read()
+            return True
+        except FileNotFoundError:
+            return False
+        except Exception as e:
+            print(f"Error al leer el archivo: {e}")
+            return False
+
+    def mostrar_codigo(self, ui: InterfazUsuario):
+        """
+        Muestra el código fuente del script.
+
+        Args:
+            ui: Instancia de InterfazUsuario para mostrar
+        """
+        if not self.contenido:
+            if not self.cargar_contenido():
+                ui.mostrar_mensaje("No se pudo cargar el contenido del script.", "error")
+                return
+
+        ui.mostrar_encabezado(f"Código de {self.nombre}")
+        print(self.contenido)
+        print("\n" + "-" * 80 + "\n")
+
+    def ejecutar(self, logger: Logger):
+        """
+        Ejecuta el script en una nueva terminal.
+
+        Args:
+            logger: Logger para registrar la ejecución
+        """
+        try:
+            logger.registrar("Ejecución", str(self.ruta))
+
+            if os.name == 'nt':  # Windows
+                subprocess.Popen(['cmd', '/k', 'python', str(self.ruta)])
+            else:  # Unix-based systems
+                # Intentar diferentes emuladores de terminal
+                terminales = ['gnome-terminal', 'xterm', 'konsole', 'xfce4-terminal']
+                for terminal in terminales:
+                    try:
+                        if terminal == 'gnome-terminal':
+                            subprocess.Popen([terminal, '--', 'python3', str(self.ruta)])
+                        else:
+                            subprocess.Popen([terminal, '-hold', '-e', 'python3', str(self.ruta)])
+                        break
+                    except FileNotFoundError:
+                        continue
+        except Exception as e:
+            print(f"Ocurrió un error al ejecutar el código: {e}")
+
+    def obtener_info(self) -> str:
+        """
+        Obtiene información resumida del script.
+
+        Returns:
+            String con información del script
+        """
+        if not self.contenido:
+            self.cargar_contenido()
+
+        lineas = len(self.contenido.split('\n')) if self.contenido else 0
+        tamanio = os.path.getsize(self.ruta)
+
+        return f"{self.nombre} ({lineas} líneas, {tamanio} bytes)"
+
+
+class Carpeta:
+    """
+    Representa una carpeta contenedora de scripts o subcarpetas.
+
+    Maneja la estructura jerárquica del sistema de archivos y
+    proporciona métodos para listar y acceder a su contenido.
+    """
+
+    def __init__(self, ruta: Path):
+        """
+        Inicializa una carpeta.
+
+        Args:
+            ruta: Ruta de la carpeta
+        """
+        self.ruta = ruta
+        self.nombre = ruta.name
+
+    def obtener_subcarpetas(self) -> List['Carpeta']:
+        """
+        Obtiene lista de subcarpetas.
+
+        Returns:
+            Lista de objetos Carpeta
+        """
+        try:
+            return [
+                Carpeta(entrada.path)
+                for entrada in os.scandir(self.ruta)
+                if entrada.is_dir() and not entrada.name.startswith('.')
+            ]
+        except Exception as e:
+            print(f"Error al leer subcarpetas: {e}")
+            return []
+
+    def obtener_scripts(self) -> List[Script]:
+        """
+        Obtiene lista de scripts en la carpeta.
+
+        Returns:
+            Lista de objetos Script
+        """
+        try:
+            return [
+                Script(Path(entrada.path))
+                for entrada in os.scandir(self.ruta)
+                if entrada.is_file() and entrada.name.endswith(Config.EXTENSION_SCRIPTS)
+            ]
+        except Exception as e:
+            print(f"Error al leer scripts: {e}")
+            return []
+
+    def buscar_scripts(self, termino: str) -> List[Script]:
+        """
+        Busca scripts que contengan el término en su nombre.
+
+        Args:
+            termino: Término de búsqueda
+
+        Returns:
+            Lista de scripts que coinciden
+        """
+        scripts_encontrados = []
+        termino = termino.lower()
+
+        for script in self.obtener_scripts():
+            if termino in script.nombre.lower():
+                scripts_encontrados.append(script)
+
+        for subcarpeta in self.obtener_subcarpetas():
+            scripts_encontrados.extend(subcarpeta.buscar_scripts(termino))
+
+        return scripts_encontrados
+
+
+class Dashboard:
+    """
+    Clase principal del dashboard de gestión de proyectos.
+
+    Coordina la navegación entre menús, gestión de scripts y
+    proporciona la interfaz principal del sistema.
+    """
+
+    def __init__(self, ruta_base: Optional[Path] = None):
+        """
+        Inicializa el dashboard.
+
+        Args:
+            ruta_base: Ruta base del proyecto (por defecto, directorio del script)
+        """
+        self.ruta_base = ruta_base or Path(__file__).parent
+        self.ui = InterfazUsuario()
+        self.logger = Logger(os.path.join(self.ruta_base, Config.NOMBRE_LOG))
+        self.unidades: Dict[str, Carpeta] = self._cargar_unidades()
+
+    def _cargar_unidades(self) -> Dict[str, Carpeta]:
+        """
+        Carga las unidades disponibles en el directorio base.
+
+        Returns:
+            Diccionario con las unidades encontradas
+        """
+        unidades = {}
+
+        # Buscar carpetas que comiencen con "Unidad"
+        for entrada in os.scandir(self.ruta_base):
+            if entrada.is_dir() and entrada.name.startswith('Unidad'):
+                # Extraer número de unidad
+                try:
+                    num_unidad = entrada.name.split()[1]
+                    unidades[num_unidad] = Carpeta(Path(entrada.path))
+                except (IndexError, ValueError):
+                    # Si no se puede extraer número, usar nombre completo
+                    unidades[entrada.name] = Carpeta(Path(entrada.path))
+
+        return unidades
+
+    def mostrar_menu_principal(self):
+        """Muestra y gestiona el menú principal del dashboard."""
+        while True:
+            self.ui.limpiar_pantalla()
+
+            opciones = [
+                (clave, f"Unidad {clave}")
+                for clave in sorted(self.unidades.keys())
+            ]
+            opciones.extend([
+                ('s', 'Buscar script'),
+                ('e', 'Ver estadísticas'),
+                ('h', 'Ver historial'),
+                (Config.OPCION_SALIR, 'Salir')
+            ])
+
+            self.ui.mostrar_menu(opciones, "Dashboard de Programación Orientada a Objetos")
+
+            eleccion = self.ui.solicitar_entrada("Selecciona una opción: ")
+
+            if eleccion == Config.OPCION_SALIR:
+                self.ui.mostrar_mensaje("¡Hasta pronto!", "exito")
+                break
+            elif eleccion == 's':
+                self.buscar_script()
+            elif eleccion == 'e':
+                self.mostrar_estadisticas()
+            elif eleccion == 'h':
+                self.mostrar_historial()
+            elif eleccion in self.unidades:
+                self.mostrar_menu_unidad(self.unidades[eleccion])
+            else:
+                self.ui.mostrar_mensaje("Opción no válida. Por favor, intenta de nuevo.", "advertencia")
+                self.ui.pausar()
+
+    def mostrar_menu_unidad(self, unidad: Carpeta):
+        """
+        Muestra el menú de una unidad específica.
+
+        Args:
+            unidad: Objeto Carpeta de la unidad
+        """
+        while True:
+            self.ui.limpiar_pantalla()
+
+            subcarpetas = unidad.obtener_subcarpetas()
+
+            if not subcarpetas:
+                self.ui.mostrar_mensaje("No se encontraron subcarpetas en esta unidad.", "advertencia")
+                self.ui.pausar()
+                return
+
+            opciones = [
+                (str(i), carpeta.nombre)
+                for i, carpeta in enumerate(subcarpetas, start=1)
+            ]
+            opciones.append((Config.OPCION_SALIR, "Volver al menú principal"))
+
+            self.ui.mostrar_menu(opciones, f"Unidad: {unidad.nombre}")
+
+            eleccion = self.ui.solicitar_entrada("Selecciona una subcarpeta: ")
+
+            if eleccion == Config.OPCION_SALIR:
+                return
+
+            try:
+                indice = int(eleccion) - 1
+                if 0 <= indice < len(subcarpetas):
+                    self.mostrar_menu_scripts(subcarpetas[indice])
+                else:
+                    self.ui.mostrar_mensaje("Opción no válida.", "advertencia")
+                    self.ui.pausar()
+            except ValueError:
+                self.ui.mostrar_mensaje("Por favor, ingresa un número válido.", "advertencia")
+                self.ui.pausar()
+
+    def mostrar_menu_scripts(self, carpeta: Carpeta):
+        """
+        Muestra el menú de scripts de una carpeta.
+
+        Args:
+            carpeta: Objeto Carpeta contenedor de scripts
+        """
+        while True:
+            self.ui.limpiar_pantalla()
+
+            scripts = carpeta.obtener_scripts()
+
+            if not scripts:
+                self.ui.mostrar_mensaje("No se encontraron scripts en esta carpeta.", "advertencia")
+                self.ui.pausar()
+                return
+
+            opciones = [
+                (str(i), script.obtener_info())
+                for i, script in enumerate(scripts, start=1)
+            ]
+            opciones.extend([
+                (Config.OPCION_SALIR, "Volver"),
+                (Config.OPCION_MENU_PRINCIPAL, "Menú principal")
+            ])
+
+            self.ui.mostrar_menu(opciones, f"Scripts en: {carpeta.nombre}")
+
+            eleccion = self.ui.solicitar_entrada("Selecciona un script: ")
+
+            if eleccion == Config.OPCION_SALIR:
+                return
+            elif eleccion == Config.OPCION_MENU_PRINCIPAL:
+                return  # Volver al menú principal
+
+            try:
+                indice = int(eleccion) - 1
+                if 0 <= indice < len(scripts):
+                    self.gestionar_script(scripts[indice])
+                else:
+                    self.ui.mostrar_mensaje("Opción no válida.", "advertencia")
+                    self.ui.pausar()
+            except ValueError:
+                self.ui.mostrar_mensaje("Por favor, ingresa un número válido.", "advertencia")
+                self.ui.pausar()
+
+    def gestionar_script(self, script: Script):
+        """
+        Gestiona las acciones sobre un script seleccionado.
+
+        Args:
+            script: Objeto Script a gestionar
+        """
+        self.ui.limpiar_pantalla()
+        script.mostrar_codigo(self.ui)
+
+        self.logger.registrar("Visualización", str(script.ruta))
+
+        opciones = [
+            ('1', 'Ejecutar script'),
+            ('2', 'Ver solo código'),
+            (Config.OPCION_SALIR, 'Volver')
+        ]
+
+        self.ui.mostrar_menu(opciones)
+
+        eleccion = self.ui.solicitar_entrada("¿Qué deseas hacer? ")
+
+        if eleccion == '1':
+            self.ui.mostrar_mensaje("Ejecutando script...", "info")
+            script.ejecutar(self.logger)
+            self.ui.pausar()
+        elif eleccion == '2':
+            self.ui.pausar()
+        # Si es 0 o cualquier otra cosa, volver
+
+    def buscar_script(self):
+        """Permite buscar scripts por nombre en todo el proyecto."""
+        self.ui.limpiar_pantalla()
+        self.ui.mostrar_encabezado("Búsqueda de Scripts")
+
+        termino = self.ui.solicitar_entrada("Ingresa el término de búsqueda: ")
+
+        if not termino:
+            return
+
+        resultados = []
+        for unidad in self.unidades.values():
+            resultados.extend(unidad.buscar_scripts(termino))
+
+        if not resultados:
+            self.ui.mostrar_mensaje(f"No se encontraron scripts con '{termino}'.", "advertencia")
+        else:
+            self.ui.mostrar_mensaje(f"\nEncontrados {len(resultados)} script(s):", "exito")
+            for i, script in enumerate(resultados, start=1):
+                print(f"{i}. {script.ruta}")
+
+        self.ui.pausar()
+
+    def mostrar_estadisticas(self):
+        """Muestra estadísticas de uso del dashboard."""
+        self.ui.limpiar_pantalla()
+        self.ui.mostrar_encabezado("Estadísticas de Uso")
+
+        stats = self.logger.obtener_estadisticas()
+
+        print(f"Total de acciones registradas: {stats['total_acciones']}")
+        print(f"Scripts visualizados: {stats['visualizaciones']}")
+        print(f"Scripts ejecutados: {stats['ejecuciones']}")
+
+        # Contar scripts totales
+        total_scripts = sum(
+            len(unidad.obtener_scripts())
+            for unidad in self.unidades.values()
+        )
+        print(f"\nScripts disponibles en el proyecto: {total_scripts}")
+        print(f"Unidades disponibles: {len(self.unidades)}")
+
+        self.ui.pausar()
+
+    def mostrar_historial(self):
+        """Muestra el historial de acciones recientes."""
+        self.ui.limpiar_pantalla()
+        self.ui.mostrar_encabezado("Historial de Acciones")
+
+        try:
+            with open(os.path.join(self.ruta_base, Config.NOMBRE_LOG), 'r', encoding='utf-8') as f:
+                lineas = f.readlines()
+                # Mostrar las últimas 20 líneas
+                for linea in lineas[-20:]:
+                    print(linea.rstrip())
+        except FileNotFoundError:
+            self.ui.mostrar_mensaje("No hay historial disponible.", "advertencia")
+        except Exception as e:
+            self.ui.mostrar_mensaje(f"Error al leer historial: {e}", "error")
+
+        self.ui.pausar()
+
+    def ejecutar(self):
+        """Punto de entrada principal del dashboard."""
+        try:
+            self.logger.registrar("Inicio", "Dashboard iniciado")
+            self.mostrar_menu_principal()
+            self.logger.registrar("Fin", "Dashboard cerrado normalmente")
+        except KeyboardInterrupt:
+            print("\n")
+            self.ui.mostrar_mensaje("Dashboard interrumpido por el usuario.", "advertencia")
+            self.logger.registrar("Fin", "Dashboard interrumpido (Ctrl+C)")
+        except Exception as e:
+            self.ui.mostrar_mensaje(f"Error inesperado: {e}", "error")
+            self.logger.registrar("Error", str(e))
+
+
+def main():
+    """
+    Función principal para ejecutar el dashboard.
+
+    Punto de entrada cuando se ejecuta el script directamente.
+    """
+    # Crear instancia del dashboard
+    dashboard = Dashboard()
+
+    # Ejecutar el dashboard
+    dashboard.ejecutar()
+
+
+if __name__ == "__main__":
+        main()
