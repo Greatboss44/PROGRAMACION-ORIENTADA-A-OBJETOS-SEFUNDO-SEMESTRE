@@ -1,0 +1,102 @@
+
+# Clase Producto
+class Producto:
+    def __init__(self, id, nombre, cantidad, precio):
+        self.id = id
+        self.nombre = nombre
+        self.cantidad = cantidad
+        self.precio = precio
+
+
+# Clase Inventario
+class Inventario:
+    def __init__(self):
+        self.productos = []  # Lista donde se guardan los productos
+
+    def agregar_producto(self, producto):
+        # Verificar que el ID no se repita
+        for p in self.productos:
+            if p.id == producto.id:
+                print(" El ID ya existe.")
+                return
+        self.productos.append(producto)
+        print(" Producto agregado.")
+
+    def eliminar_producto(self, id):
+        for p in self.productos:
+            if p.id == id:
+                self.productos.remove(p)
+                print(" Producto eliminado.")
+                return
+        print(" Producto no encontrado.")
+
+    def actualizar_producto(self, id):
+        for p in self.productos:
+            if p.id == id:
+                p.cantidad = int(input("Nueva cantidad: "))
+                p.precio = float(input("Nuevo precio: "))
+                print(" Producto actualizado.")
+                return
+        print(" Producto no encontrado.")
+
+    def buscar_producto(self, nombre):
+        encontrado = False
+        for p in self.productos:
+            if nombre.lower() in p.nombre.lower():
+                print(p.id, p.nombre, p.cantidad, p.precio)
+                encontrado = True
+        if not encontrado:
+            print(" No se encontraron productos.")
+
+    def mostrar_productos(self):
+        if not self.productos:
+            print(" Inventario vacío.")
+        else:
+            print("\n LISTA DE PRODUCTOS")
+            for p in self.productos:
+                print(p.id, p.nombre, p.cantidad, p.precio)
+
+
+# Programa principal
+inventario = Inventario()
+
+while True:
+    print("\n===== MENÚ =====")
+    print("1. Agregar producto")
+    print("2. Eliminar producto")
+    print("3. Actualizar producto")
+    print("4. Buscar producto")
+    print("5. Mostrar inventario")
+    print("6. Salir")
+
+    opcion = input("Seleccione una opción: ")
+
+    if opcion == "1":
+        id = int(input("ID: "))
+        nombre = input("Nombre: ")
+        cantidad = int(input("Cantidad: "))
+        precio = float(input("Precio: "))
+        producto = Producto(id, nombre, cantidad, precio)
+        inventario.agregar_producto(producto)
+
+    elif opcion == "2":
+        id = int(input("Ingrese ID a eliminar: "))
+        inventario.eliminar_producto(id)
+
+    elif opcion == "3":
+        id = int(input("Ingrese ID a actualizar: "))
+        inventario.actualizar_producto(id)
+
+    elif opcion == "4":
+        nombre = input("Nombre a buscar: ")
+        inventario.buscar_producto(nombre)
+
+    elif opcion == "5":
+        inventario.mostrar_productos()
+
+    elif opcion == "6":
+        print(" Programa finalizado.")
+        break
+
+    else:
+        print(" Opción inválida.")
