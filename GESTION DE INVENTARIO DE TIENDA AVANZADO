@@ -1,0 +1,254 @@
+import os
+import json
+
+# CLASE PRODUCTO
+# Representa un ítem del inventario con sus atributos principales.
+# Usa una tupla para almacenar datos inmutables de referencia (id, nombre).
+
+class Producto:
+    def __init__(self, id: int, nombre: str, cantidad: int, precio: float):
+        self._id = id          # ID único (inmutable, no se cambia después de crear)
+        self._nombre = nombre  # Nombre del producto
+        self._cantidad = cantidad
+        self._precio = precio
+
+    # --- Getters ---
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def nombre(self):
+        return self._nombre
+
+    @property
+    def cantidad(self):
+        return self._cantidad
+
+    @property
+    def precio(self):
+        return self._precio
+
+    # --- Setters ---
+    @cantidad.setter
+    def cantidad(self, valor: int):
+        if valor < 0:
+            raise ValueError("La cantidad no puede ser negativa.")
+        self._cantidad = valor
+
+    @precio.setter
+    def precio(self, valor: float):
+        if valor < 0:
+            raise ValueError("El precio no puede ser negativo.")
+        self._precio = valor
+
+    # Referencia inmutable del producto (tupla)
+    def referencia(self) -> tuple:
+        return (self._id, self._nombre)
+
+    def __str__(self):
+        return f"[ID: {self._id}] {self._nombre:<20} Cantidad: {self._cantidad:<6} Precio: ${self._precio:.2f}"
+
+    # Serialización a diccionario para guardar en JSON
+    def a_dict(self) -> dict:
+        return {
+            "id": self._id,
+            "nombre": self._nombre,
+            "cantidad": self._cantidad,
+            "precio": self._precio
+        }
+
+
+# CLASE INVENTARIO
+# Usa un DICCIONARIO {id: Producto} para búsqueda O(1) por ID.
+# Usa un CONJUNTO de IDs para verificar duplicados rápidamente.
+# Usa LISTAS para mostrar/filtrar resultados.
+# El almacenamiento persistente se hace en formato JSON.
+
+class Inventario:
+    def __init__(self, archivo: str = "inventario.json"):
+        self._productos: dict[int, Producto] = {}  # Colección principal: diccionario
+        self._ids_usados: set = set()              # Conjunto para verificar IDs únicos
+        self._archivo = archivo
+        self._cargar_desde_archivo()
+
+
+    # ALMACENAMIENTO EN ARCHIVOS
+
+    def _cargar_desde_archivo(self):
+        """Deserializa el inventario desde un archivo JSON."""
+        try:
+            if not os.path.exists(self._archivo):
+                open(self._archivo, "w").close()
+                print("  Archivo de inventario creado.")
+                return
+
+            with open(self._archivo, "r", encoding="utf-8") as f:
+                contenido = f.read().strip()
+                if not contenido:
+                    return
+                datos: list = json.loads(contenido)  # Lista de dicts
+                for d in datos:
+                    p = Producto(d["id"], d["nombre"], d["cantidad"], d["precio"])
+                    self._productos[p.id] = p
+                    self._ids_usados.add(p.id)
+            print(f"  Inventario cargado: {len(self._productos)} producto(s).")
+        except PermissionError:
+            print("  Error: Sin permisos para acceder al archivo.")
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"  Error al interpretar el archivo: {e}")
+
+    def _guardar_en_archivo(self):
+        """Serializa el inventario a un archivo JSON."""
+        try:
+            # Convierte los productos a lista de dicts para serializar
+            datos: list = [p.a_dict() for p in self._productos.values()]
+            with open(self._archivo, "w", encoding="utf-8") as f:
+                json.dump(datos, f, ensure_ascii=False, indent=2)
+            print("  Cambios guardados.")
+        except PermissionError:
+            print("  Error: Sin permisos para escribir en el archivo.")
+        except Exception as e:
+            print(f"  Error al guardar: {e}")
+
+
+    # MÉTODOS DE GESTIÓN
+
+    def agregar_producto(self, producto: Producto):
+        """Añade un producto. Usa el conjunto _ids_usados para verificar duplicados."""
+        if producto.id in self._ids_usados:
+            print("  Error: Ya existe un producto con ese ID.")
+            return
+        self._productos[producto.id] = producto
+        self._ids_usados.add(producto.id)
+        print("  Producto agregado correctamente.")
+        self._guardar_en_archivo()
+
+    def eliminar_producto(self, id: int):
+        """Elimina un producto por ID del diccionario y del conjunto."""
+        if id not in self._productos:
+            print("  Producto no encontrado.")
+            return
+        del self._productos[id]
+        self._ids_usados.discard(id)
+        print("  Producto eliminado correctamente.")
+        self._guardar_en_archivo()
+
+    def actualizar_producto(self, id: int):
+        """Actualiza cantidad y/o precio de un producto existente."""
+        if id not in self._productos:
+            print("  Producto no encontrado.")
+            return
+        p = self._productos[id]
+        print(f"  Producto actual: {p}")
+        try:
+            nueva_cantidad = int(input("  Nueva cantidad (Enter para mantener): ") or p.cantidad)
+            nuevo_precio   = float(input("  Nuevo precio   (Enter para mantener): ") or p.precio)
+            p.cantidad = nueva_cantidad
+            p.precio   = nuevo_precio
+            print("  Producto actualizado correctamente.")
+            self._guardar_en_archivo()
+        except ValueError as e:
+            print(f"  Error: {e}")
+
+    def buscar_por_nombre(self, nombre: str):
+        """
+        Filtra el diccionario y devuelve una LISTA de productos coincidentes.
+        La búsqueda es insensible a mayúsculas/minúsculas.
+        """
+        # List comprehension sobre los valores del diccionario
+        resultados: list[Producto] = [
+            p for p in self._productos.values()
+            if nombre.lower() in p.nombre.lower()
+        ]
+        if not resultados:
+            print("  No se encontraron productos.")
+        else:
+            print(f"\n  Resultados para '{nombre}':")
+            for p in resultados:
+                print(f"  {p}")
+
+    def mostrar_todos(self):
+        """Muestra todos los productos ordenados por ID usando una lista."""
+        if not self._productos:
+            print("  El inventario está vacío.")
+            return
+        # sorted() sobre el diccionario genera una lista ordenada
+        lista_ordenada: list[Producto] = sorted(self._productos.values(), key=lambda p: p.id)
+        print(f"\n  {'=' * 55}")
+        print(f"  {'INVENTARIO COMPLETO':^55}")
+        print(f"  {'=' * 55}")
+        for p in lista_ordenada:
+            print(f"  {p}")
+        print(f"  {'=' * 55}")
+        print(f"  Total de productos: {len(lista_ordenada)}")
+
+    def resumen_ids(self) -> set:
+        """Devuelve el conjunto de IDs en uso (para consulta rápida)."""
+        return self._ids_usados.copy()
+# INTERFAZ DE USUARIO — MENÚ INTERACTIVO
+
+def menu():
+    inventario = Inventario()
+
+    opciones = {
+        "1": "Agregar producto",
+        "2": "Eliminar producto",
+        "3": "Actualizar producto",
+        "4": "Buscar por nombre",
+        "5": "Mostrar inventario",
+        "6": "Ver IDs en uso",
+        "7": "Salir",
+    }
+
+    while True:
+        print("\n" + "=" * 35)
+        print("   GESTIÓN DE INVENTARIO - TIENDA")
+        print("=" * 35)
+        for k, v in opciones.items():
+            print(f"  {k}. {v}")
+        print("=" * 35)
+
+        opcion = input("  Seleccione una opción: ").strip()
+
+        try:
+            if opcion == "1":
+                id       = int(input("  ID: "))
+                nombre   = input("  Nombre: ").strip()
+                cantidad = int(input("  Cantidad: "))
+                precio   = float(input("  Precio: "))
+                inventario.agregar_producto(Producto(id, nombre, cantidad, precio))
+
+            elif opcion == "2":
+                id = int(input("  ID a eliminar: "))
+                inventario.eliminar_producto(id)
+
+            elif opcion == "3":
+                id = int(input("  ID a actualizar: "))
+                inventario.actualizar_producto(id)
+
+            elif opcion == "4":
+                nombre = input("  Nombre a buscar: ").strip()
+                inventario.buscar_por_nombre(nombre)
+
+            elif opcion == "5":
+                inventario.mostrar_todos()
+
+            elif opcion == "6":
+                ids = inventario.resumen_ids()
+                print(f"  IDs en uso: {sorted(ids) if ids else 'Ninguno'}")
+
+            elif opcion == "7":
+                print("  Programa finalizado. ¡Hasta pronto!")
+                break
+
+            else:
+                print("  Opción inválida. Intente de nuevo.")
+
+        except ValueError:
+            print("  Error: Ingrese valores numéricos válidos.")
+
+
+# Punto de entrada
+if __name__ == "__main__":
+    menu()
