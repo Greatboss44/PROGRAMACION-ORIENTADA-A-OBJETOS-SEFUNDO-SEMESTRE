@@ -1,0 +1,90 @@
+import tkinter as tk
+
+
+# Clase que representa una tarea
+# Principio SRP
+class Task:
+    def __init__(self, description):
+        self.description = description
+
+
+
+# Clase que gestiona las tareas
+class TaskManager:
+    def __init__(self):
+        self.tasks = []
+
+    def add_task(self, description):
+        task = Task(description)
+        self.tasks.append(task)
+
+    def clear_tasks(self):
+        self.tasks.clear()
+
+    def get_tasks(self):
+        return self.tasks
+
+
+
+# Interfaz gráfica
+
+class TaskGUI:
+
+    def __init__(self, root, manager):
+        self.manager = manager
+        self.root = root
+        self.root.title("Gestor de Tareas Simple")
+
+        # Label
+        self.label = tk.Label(root, text="Ingrese una tarea:")
+        self.label.pack()
+
+        # Campo de texto
+        self.entry = tk.Entry(root, width=40)
+        self.entry.pack()
+
+        # Botón agregar
+        self.add_button = tk.Button(root, text="Agregar", command=self.add_task)
+        self.add_button.pack()
+
+        # Lista
+        self.listbox = tk.Listbox(root, width=50)
+        self.listbox.pack()
+
+        # Botón limpiar
+        self.clear_button = tk.Button(root, text="Limpiar Lista", command=self.clear_tasks)
+        self.clear_button.pack()
+
+    # Evento botón agregar
+    def add_task(self):
+        text = self.entry.get()
+
+        if text != "":
+            self.manager.add_task(text)
+            self.update_list()
+            self.entry.delete(0, tk.END)
+
+    # Actualiza la lista visual
+    def update_list(self):
+        self.listbox.delete(0, tk.END)
+
+        for task in self.manager.get_tasks():
+            self.listbox.insert(tk.END, task.description)
+
+    # Evento limpiar
+    def clear_tasks(self):
+        self.manager.clear_tasks()
+        self.update_list()
+
+
+
+# Programa principal
+
+if __name__ == "__main__":
+    root = tk.Tk()
+
+    manager = TaskManager()
+
+    app = TaskGUI(root, manager)
+
+    root.mainloop()
