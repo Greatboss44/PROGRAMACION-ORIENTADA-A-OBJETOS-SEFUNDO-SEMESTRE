@@ -1,0 +1,79 @@
+import tkinter as tk
+from tkinter import messagebox
+
+
+        self.root.title("Lista de Tareas")
+
+        # Campo de entrada
+        self.entry = tk.Entry(root, width=40)
+        self.entry.pack(pady=10)
+        self.entry.bind("<Return>", self.add_task_event)  # Evento Enter
+
+        # Lista de tareas
+        self.listbox = tk.Listbox(root, width=50, height=10)
+        self.listbox.pack()
+        self.listbox.bind("<Double-Button-1>", self.toggle_task_event)  # Doble clic
+
+        # Botones
+        frame_buttons = tk.Frame(root)
+        frame_buttons.pack(pady=10)
+
+        btn_add = tk.Button(frame_buttons, text="Añadir Tarea", command=self.add_task)
+        btn_add.grid(row=0, column=0, padx=5)
+
+        btn_complete = tk.Button(frame_buttons, text="Marcar como Completada", command=self.toggle_task)
+        btn_complete.grid(row=0, column=1, padx=5)
+
+        btn_delete = tk.Button(frame_buttons, text="Eliminar Tarea", command=self.delete_task)
+        btn_delete.grid(row=0, column=2, padx=5)
+
+
+    def update_listbox(self):
+        """Actualiza la lista visual"""
+        self.listbox.delete(0, tk.END)
+        for task in self.manager.tasks:
+            status = "✔" if task.completed else "✘"
+            self.listbox.insert(tk.END, f"[{status}] {task.description}")
+
+
+    def add_task_event(self, event):
+        """Evento al presionar Enter"""
+        self.add_task()
+
+    def toggle_task_event(self, event):
+        """Evento doble clic"""
+        self.toggle_task()
+
+
+    def add_task(self):
+        text = self.entry.get()
+        if text.strip() == "":
+            messagebox.showwarning("Advertencia", "Ingrese una tarea")
+            return
+
+        self.manager.add_task(text)
+        self.entry.delete(0, tk.END)
+        self.update_listbox()
+
+    def delete_task(self):
+        try:
+            index = self.listbox.curselection()[0]
+            self.manager.delete_task(index)
+            self.update_listbox()
+        except IndexError:
+            messagebox.showwarning("Advertencia", "Seleccione una tarea")
+
+    def toggle_task(self):
+        try:
+            index = self.listbox.curselection()[0]
+            self.manager.toggle_task(index)
+            self.update_listbox()
+        except IndexError:
+            messagebox.showwarning("Advertencia", "Seleccione una tarea")
+
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TaskApp(root)
+    root.mainloop()
